@@ -23,6 +23,7 @@
 
 // This is where scripts' loading functions should be declared:
 void AddSCmy_script_class();
+void AddSC_custom_spell_scripts();
  
  
 // The name of this function should match:
@@ -30,4 +31,5 @@ void AddSCmy_script_class();
 void AddCustomScripts()
 {
     AddSCmy_script_class();
+    AddSC_custom_spell_scripts();
 }

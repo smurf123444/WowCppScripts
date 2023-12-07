@@ -13,6 +13,8 @@ enum Say
     SAY_KILL,
 };
 
+
+
 enum Spells
 {
 /*     SPELL_MARK_OF_FROST       = 23182,
@@ -23,8 +25,9 @@ enum Spells
     SPELL_FROST_BREATH        = 21099,
     SPELL_REFLECT             = 22067,
     SPELL_CLEAVE              = 19983,
-    SPELL_ARCANE_VACUUM       = 21147,
+    
     SPELL_ARCANE_VACUUM_TP    = 21150 */
+    SPELL_ARCANE_VACUUM       = 21147,
     SPELL_STORMSTRIKE         = 17364,
     SPELL_CHAIN_LIGHTNING     = 49271,
     SPELL_SHOCKWAVE           = 75417,
@@ -43,15 +46,15 @@ Position const chokePos[6] =
 };
 
 
-class boss_azuregos : public CreatureScript
+class boss_custom : public CreatureScript
 {
 public:
 
-    boss_azuregos() : CreatureScript("my_custom_boss") { }
+    boss_custom() : CreatureScript("my_custom_boss") { }
 
-    struct boss_azuregosAI : public ScriptedAI
+    struct boss_customAI : public ScriptedAI
     {
-        boss_azuregosAI(Creature* creature) : ScriptedAI(creature)
+        boss_customAI(Creature* creature) : ScriptedAI(creature)
         {
             scheduler.SetValidator([this]
             {
@@ -83,54 +86,28 @@ public:
             }
         }
 
-/*         void JustEngagedWith(Unit* who) override
-        {
-
-            _isBelow20Pct = false;
-            _isThirdPhase = false;
-            _bombCount = 0;
-            _mysticBuffetStack = 0;
-
-           // summons.DespawnAll();
-            events.Reset();
-            events.ScheduleEvent(EVENT_BERSERK, 10min);
-            events.ScheduleEvent(EVENT_AIR_PHASE, 50s);
-            events.ScheduleEvent(EVENT_CLEAVE, 10s, EVENT_GROUP_LAND_PHASE);
-            events.ScheduleEvent(EVENT_TAIL_SMASH, 20s, EVENT_GROUP_LAND_PHASE);
-            events.ScheduleEvent(EVENT_FROST_BREATH, 8s, 12s, EVENT_GROUP_LAND_PHASE);
-            events.ScheduleEvent(EVENT_UNCHAINED_MAGIC, 9s, 14s, EVENT_GROUP_LAND_PHASE);
-            events.ScheduleEvent(EVENT_ICY_GRIP, 33s + 500ms, EVENT_GROUP_LAND_PHASE);
-
-            me->setActive(true);
-            me->SetInCombatWithZone();
-           // instance->SetBossState(DATA_SINDRAGOSA, IN_PROGRESS);
-
-            me->CastSpell(me, SPELL_FROST_AURA, true);
-            me->CastSpell(me, SPELL_PERMAEATING_CHILL, true);
-            Talk(SAY_AGGRO);
-        } */
 
         void JustEngagedWith(Unit*) override
         {
             //DoCastSelf(SPELL_MARK_OF_FROST_AURA);
             Talk(SAY_AGGRO);
 
-/*             scheduler
-                .Schedule(7s, [this](TaskContext context)
+             scheduler
+/*                 .Schedule(7s, [this](TaskContext context)
                 {
                     DoCastVictim(SPELL_STORMSTRIKE);
                     context.Repeat(7s);
-                })
+                }) */
                 .Schedule(5s, 17s, [this](TaskContext context)
                 {
                     DoCastRandomTarget(SPELL_CHAIN_LIGHTNING);
                     context.Repeat(7s, 13s);
                 })
-                .Schedule(10s, 30s, [this](TaskContext context)
+/*                 .Schedule(10s, 30s, [this](TaskContext context)
                 {
                     DoCastVictim(SPELL_SHOCKWAVE);
                     context.Repeat(13s, 25s);
-                }); */
+                }) */; 
 /*                 .Schedule(2s, 8s, [this](TaskContext context)
                 {
                     DoCastVictim(SPELL_FROST_BREATH);
@@ -152,25 +129,28 @@ public:
         {
             switch (spell->Id)
             {
-                case SPELL_SHOCKWAVE:
-                     DoResetThreat(target);
+                case SPELL_CHAIN_LIGHTNING:
+/*                      DoResetThreat(target);
                     // Resets the specified unit's threat list (me if not specified) - does not delete entries, just sets their threat to zero
-                    DoResetThreatList();
-                    DoStartMovement(target, 10.0f, 3.0f);
+                    DoResetThreatList(); */
+                    target->SetStandState(UNIT_STAND_STATE_KNEEL);
+                    target->AttackStop();
+                    target->RemoveAllAttackers();
+                    me->AttackStop();
+                    me->RemoveAllAttackers();
+                    target->HandleEmoteCommand(473);
                     break;
             }
         }
-        void SpellHit(Unit* caster, SpellInfo const* spell) override
+/*         void SpellHit(Unit* caster, SpellInfo const* spell) override
         {
-            if (spell->Id == SPELL_SHOCKWAVE)
+            if (spell->Id == SPELL_CHAIN_LIGHTNING)
             {
             
-                DoResetThreat(caster);
-                // Resets the specified unit's threat list (me if not specified) - does not delete entries, just sets their threat to zero
-                DoResetThreatList();
-                DoStartMovement(caster, 10.0f, 3.0f);
+
+                caster->HandleEmoteCommand(473);
             }
-        }
+        } */
 
         void JustDied(Unit* /*killer*/) override
         {
@@ -223,7 +203,7 @@ public:
 
     CreatureAI* GetAI(Creature* creature) const override
     {
-        return new boss_azuregosAI(creature);
+        return new boss_customAI(creature);
     }
 };
 /* 
@@ -280,9 +260,11 @@ class spell_mark_of_frost_freeze : public SpellScript
     }
 }; */
 
+
+
 void AddSCmy_script_class()
 {
-    new boss_azuregos();
-/*     RegisterSpellScript(spell_arcane_vacuum);
-    RegisterSpellScript(spell_mark_of_frost_freeze); */
+    new boss_custom();
+/*     RegisterSpellScript(spell_arcane_vacuum); */
+ /*   RegisterSpellScript(spell_mark_of_frost_freeze); */
 }
