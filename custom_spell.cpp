@@ -1,23 +1,21 @@
 
-
-#include "ScriptMgr.h"
 #include "SpellAuraEffects.h"
 #include "SpellMgr.h"
 #include "SpellScript.h"
+
+#include "SpellInfo.h"
+#include "TemporarySummon.h"
 enum CustomSpells
 {
-    BLADE_FLURRY_EXTRA_ATTACK       = 22482,
-    CHEAT_DEATH_COOLDOWN            = 31231,
-    CHEATING_DEATH                  = 45182,
-    GLYPH_OF_PREPARATION            = 56819,
-    KILLING_SPREE                   = 51690,
-    KILLING_SPREE_TELEPORT          = 57840,
-    KILLING_SPREE_WEAPON_DMG        = 57841,
-    KILLING_SPREE_DMG_BUFF          = 61851,
-    PREY_ON_THE_WEAK                = 58670,
-    SHIV_TRIGGERED                  = 5940,
-    TRICKS_OF_THE_TRADE_DMG_BOOST   = 57933,
-    TRICKS_OF_THE_TRADE_PROC        = 59628,
+    //Primary Spells
+    MORTAL_STRIKE                   = 51690,
+    MORTAL_STRIKE_CRIT              = 51690,
+    //Secondary spell
+    SLAM_SPELL                      = 12345,
+    //Auras
+    REND_AURA                       = 12345,
+    BLEED_AURA                      = 12345,
+
 };
 
 // 51690 - Killing Spree
@@ -31,17 +29,18 @@ public:
     {
         PrepareSpellScript(spell_custom_krein_test_SpellScript);
 
-        bool Validate(SpellInfo const* /*spellInfo*/) override
+        bool Validate(SpellInfo const* _spellProto) override
         {
-            return ValidateSpellInfo({ KILLING_SPREE });
+            spellProto = _spellProto;
+            return ValidateSpellInfo({ MORTAL_STRIKE });
         }
 
         SpellCastResult CheckCast()
         {
-            // Kologarn area, Killing Spree should not work
-            if (GetCaster()->GetMapId() == 603 /*Ulduar*/ && GetCaster()->GetDistance2d(1766.936f, -24.748f) < 50.0f)
+           // Kologarn area, MORTAL_STRIKE should not work
+            if (GetCaster()->GetMapId() == 603  && GetCaster()->GetDistance2d(1766.936f, -24.748f) < 50.0f)
                 return SPELL_FAILED_CANT_DO_THAT_RIGHT_NOW;
-            return SPELL_CAST_OK;
+            return SPELL_CAST_OK; 
         }
 
         void FilterTargets(std::list<WorldObject*>& targets)
@@ -54,23 +53,45 @@ public:
                 GetCaster()->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_CAST);
                 GetCaster()->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_SPELL_ATTACK);
             }
+
+            }
+
+        void HandleDummy(SpellEffIndex )
+        {
+            Unit* caster = GetCaster();
+            uint32 spellId = RAND(MORTAL_STRIKE, MORTAL_STRIKE_CRIT);
+            caster->CastSpell(caster, MORTAL_STRIKE, true, nullptr);
         }
 
-        void HandleDummy(SpellEffIndex /*effIndex*/)
+        
+        void HandleAfterCast()
         {
-            if (Aura* aura = GetCaster()->GetAura(KILLING_SPREE))
-            {
-                if (spell_custom_krein_test_AuraScript* script = dynamic_cast<spell_custom_krein_test_AuraScript*>(aura->GetScriptByName(CustomSpellScriptName)))
-                    script->AddTarget(GetHitUnit());
+            Unit* caster = GetCaster();
+            Player* target = GetHitPlayer();
+
+            // Check if there is a valid target and caster
+            if (!target || !caster)
+                return;
+            // Check if the target has the REND_AURA and if the SLAM_SPELL is on cooldown for the caster
+            if (target->GetAura(REND_AURA) && caster->HasSpellCooldown(SLAM_SPELL)) {
+                caster->ApplyCastTimePercentMod(0, true);
+                int32 test = 1000;
+                caster->ModSpellCastTime(spellProto, test, nullptr);
             }
         }
 
         void Register() override
         {
+            AfterCast += SpellCastFn(spell_custom_krein_test_SpellScript::HandleAfterCast);
             OnCheckCast += SpellCheckCastFn(spell_custom_krein_test_SpellScript::CheckCast);
             OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_custom_krein_test_SpellScript::FilterTargets, EFFECT_1, TARGET_UNIT_DEST_AREA_ENEMY);
             OnEffectHitTarget += SpellEffectFn(spell_custom_krein_test_SpellScript::HandleDummy, EFFECT_1, SPELL_EFFECT_DUMMY);
+            
         }
+
+        private:
+            std::list<WorldObject*> _targets;
+            SpellInfo const* spellProto;
     };
 
     SpellScript* GetSpellScript() const override
@@ -82,52 +103,36 @@ public:
     {
         PrepareAuraScript(spell_custom_krein_test_AuraScript);
 
-        bool Validate(SpellInfo const* /*spellInfo*/) override
+        bool Validate(SpellInfo const* ) override
         {
             return ValidateSpellInfo(
                 {
-                    KILLING_SPREE_TELEPORT,
-                    KILLING_SPREE_WEAPON_DMG,
-                    KILLING_SPREE_DMG_BUFF
+                    REND_AURA
                 });
         }
 
-        void HandleApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+        void HandleApply(AuraEffect const*, AuraEffectHandleModes )
         {
-            GetTarget()->CastSpell(GetTarget(), KILLING_SPREE_DMG_BUFF, true);
+            GetTarget()->CastSpell(GetTarget(), REND_AURA, true);
         }
 
-        void HandleEffectPeriodic(AuraEffect const* /*aurEff*/)
+        void HandleEffectPeriodic(AuraEffect const* aurEff)
         {
-            while (!_targets.empty())
+            
+            Unit* caster = aurEff->GetCaster();
+
+            if (Aura* aura = GetTarget()->GetAura(REND_AURA))
             {
-                ObjectGuid guid = Acore::Containers::SelectRandomContainerElement(_targets);
-                if (Unit* target = ObjectAccessor::GetUnit(*GetTarget(), guid))
-                {
-                    // xinef: target may be no longer valid
-                    if (!GetTarget()->IsValidAttackTarget(target) || target->HasStealthAura() || target->HasInvisibilityAura())
-                    {
-                        _targets.remove(guid);
-                        continue;
-                    }
-
-                    GetTarget()->CastSpell(target, KILLING_SPREE_TELEPORT, true);
-
-                    // xinef: ensure fast coordinates switch, dont wait for client to send opcode
-                    WorldLocation const& dest = GetTarget()->ToPlayer()->GetTeleportDest();
-                    GetTarget()->ToPlayer()->UpdatePosition(dest, true);
-
-                    GetTarget()->CastSpell(target, KILLING_SPREE_WEAPON_DMG, TriggerCastFlags(TRIGGERED_FULL_MASK & ~TRIGGERED_DONT_REPORT_CAST_ERROR));
-                    break;
-                }
-                else
-                    _targets.remove(guid);
+                // If target has aura REnd then logic here.
+                if (roll_chance_i(33))
+                    caster->CastSpell(GetTarget(), MORTAL_STRIKE_CRIT, true);
+                    caster->CastSpell(GetTarget(), BLEED_AURA, true);
             }
         }
 
-        void HandleRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+        void HandleRemove(AuraEffect const* , AuraEffectHandleModes)
         {
-            GetTarget()->RemoveAurasDueToSpell(KILLING_SPREE_DMG_BUFF);
+            GetTarget()->RemoveAurasDueToSpell(REND_AURA);
         }
 
         void Register() override
@@ -158,4 +163,3 @@ void AddSC_custom_spell_scripts()
 {
      new spell_custom_krein_test();
 }
-
